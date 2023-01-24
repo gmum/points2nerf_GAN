@@ -1,14 +1,5 @@
-import urllib
-import shutil
 import torch
-import torch.nn as nn
-from os import listdir, makedirs, remove
-from os.path import exists, join
-import glob
-import numpy as np
-import pandas as pd
-from torch.utils.data import Dataset
-from torchvision import transforms
+import random
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 

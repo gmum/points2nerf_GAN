@@ -1,18 +1,11 @@
-import numpy as np
-import os
-from os.path import join, exists
-import matplotlib.pyplot as plt
+import json
+
 import pandas as pd
-import torch
 from torch.utils.data import DataLoader
 from datetime import datetime
-from nerf_helpers import *
-from itertools import chain
-from tqdm import tqdm
 
 import matplotlib
 matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 
 from utils import *
 
@@ -25,7 +18,6 @@ from models.nerf import NeRF
 from models.resnet import resnet18
 from hypnettorch.hnets.chunked_mlp_hnet import ChunkedHMLP
 
-import open3d as o3d
 
 import argparse
 
@@ -172,9 +164,9 @@ if __name__ == '__main__':
         encoder = Encoder(config).to(device) 
 
     results_dir = config['results_dir']
-    os.makedirs(join(dirname,results_dir), exist_ok=True)
+    os.makedirs(os.path.join(dirname,results_dir), exist_ok=True)
 
-    with open(join(results_dir, "config_eval.json"), "w") as file:
+    with open(os.path.join(results_dir, "config_eval.json"), "w") as file:
         json.dump(config, file, indent=4)
 
 
@@ -182,9 +174,9 @@ if __name__ == '__main__':
     if args.epoch == 0:
         print("Loading \'latest\' models")
         try:
-            hnet.load_state_dict(torch.load(join(results_dir, f"model_hn_latest.pt"))) 
+            hnet.load_state_dict(torch.load(os.path.join(results_dir, f"model_hn_latest.pt")))
             print("Loaded HNet")
-            encoder.load_state_dict(torch.load(join(results_dir, f"model_e_latest.pt")))
+            encoder.load_state_dict(torch.load(os.path.join(results_dir, f"model_e_latest.pt")))
             print("Loaded Encoder")
         except:
             print("Haven't loaded all previous models.")
@@ -195,14 +187,14 @@ if __name__ == '__main__':
     if(starting_epoch>0):
         print("Loading weights")
         try:
-            hnet.load_state_dict(torch.load(join(results_dir, f"model_hn_{starting_epoch}.pt"))) 
+            hnet.load_state_dict(torch.load(os.path.join(results_dir, f"model_hn_{starting_epoch}.pt")))
             print("Loaded HNet")
-            encoder.load_state_dict(torch.load(join(results_dir, f"model_e_{starting_epoch}.pt")))
+            encoder.load_state_dict(torch.load(os.path.join(results_dir, f"model_e_{starting_epoch}.pt")))
             print("Loaded Encoder")
         except:
             print("Haven't found all previous models.")
 
-    results_dir = join(dirname, 'rendered_samples', config['classes'][0])
+    results_dir = os.path.join(dirname, 'rendered_samples', config['classes'][0])
     os.makedirs(results_dir, exist_ok=True)
     results_dir_main = results_dir
 
@@ -244,7 +236,7 @@ if __name__ == '__main__':
             [0, 0, 1]
             ])
 
-            results_dir = join(results_dir_main, f'o{i}')
+            results_dir = os.path.join(results_dir_main, f'o{i}')
             os.makedirs(results_dir, exist_ok=True)
             torch.set_printoptions(threshold=100)
             
@@ -262,12 +254,12 @@ if __name__ == '__main__':
                     plt.axis('off')
                     plt.grid(b=None)
                     plt.tight_layout()
-                    plt.savefig(join(results_dir, f'pc_{el}_{az}.png'))
+                    plt.savefig(os.path.join(results_dir, f'pc_{el}_{az}.png'))
                     plt.close()
             """
             
             for gt in range(10):
-                imageio.imsave(join(results_dir, f'ground_t_{gt}.png'), to8b(entry['images'][j][gt].detach().cpu().numpy()))
+                imageio.imsave(os.path.join(results_dir, f'ground_t_{gt}.png'), to8b(entry['images'][j][gt].detach().cpu().numpy()))
 
             with torch.no_grad():
                 img_i = np.random.choice(len(entry['images'][j]), 1)
@@ -281,7 +273,7 @@ if __name__ == '__main__':
 
                 frame = torch.cat([img_r,target], dim=1)
 
-                imageio.imsave(join(results_dir, f'compare_{i}.png'), to8b(frame.detach().cpu().numpy()))
+                imageio.imsave(os.path.join(results_dir, f'compare_{i}.png'), to8b(frame.detach().cpu().numpy()))
 
             with torch.no_grad():
                 render_poses = torch.stack([pose_spherical(angle, -45, 3.2) for angle in np.linspace(-180,180,render_iterations)[:-1]], 0)
@@ -294,9 +286,9 @@ if __name__ == '__main__':
                     frames.append(to8b(img.detach().cpu().numpy()))
 
                     if k%4==0:
-                        imageio.imsave(join(results_dir, f'o_{i}_{k}.png'), to8b(img.detach().cpu().numpy()))
+                        imageio.imsave(os.path.join(results_dir, f'o_{i}_{k}.png'), to8b(img.detach().cpu().numpy()))
 
-            writer = imageio.get_writer(join(results_dir, f'an_{i}.gif'), fps=30)
+            writer = imageio.get_writer(os.path.join(results_dir, f'an_{i}.gif'), fps=30)
             for frame in frames:
                 writer.append_data(frame)
             writer.close()
@@ -313,11 +305,11 @@ if __name__ == '__main__':
                                                         **render_kwargs)
 
                     
-                    imageio.imsave(join(results_dir, f'o_other_{i}_{k}.png'), to8b(img.detach().cpu().numpy()))
+                    imageio.imsave(os.path.join(results_dir, f'o_other_{i}_{k}.png'), to8b(img.detach().cpu().numpy()))
 
             render_kwargs['near'] = 0.
 
-            export_model(render_kwargs, focal, join(results_dir, f'o_model_{i}.ply'), join(results_dir, f'o_model_col_{i}.ply'), N=default_N)
+            export_model(render_kwargs, focal, os.path.join(results_dir, f'o_model_{i}.ply'), os.path.join(results_dir, f'o_model_col_{i}.ply'), N=default_N)
 
         print("Time:", round((datetime.now() - start_time).total_seconds(), 2))
 
@@ -328,7 +320,7 @@ if __name__ == '__main__':
         render_kwargs['perturb'] = False
         render_kwargs['raw_noise_std'] = 0.
         
-        results_dir = join(results_dir_main, f'g{i}')
+        results_dir = os.path.join(results_dir_main, f'g{i}')
         os.makedirs(results_dir, exist_ok=True)
 
         print("Generated Object Animation", i)
@@ -343,16 +335,16 @@ if __name__ == '__main__':
                 frames.append(to8b(img.detach().cpu().numpy()))
 
                 if k%4==0:
-                    imageio.imsave(join(results_dir, f'g_{i}_{k}.png'), to8b(img.detach().cpu().numpy()))
+                    imageio.imsave(os.path.join(results_dir, f'g_{i}_{k}.png'), to8b(img.detach().cpu().numpy()))
 
-            writer = imageio.get_writer(join(results_dir, f'g_an_{i}.gif'), fps=render_fps)
+            writer = imageio.get_writer(os.path.join(results_dir, f'g_an_{i}.gif'), fps=render_fps)
             for frame in frames:
                 writer.append_data(frame)
             writer.close()
 
             render_kwargs['near'] = 0. 
 
-            export_model(render_kwargs, focal, join(results_dir, f'g_model_{i}.ply'), join(results_dir, f'g_model_col_{i}.ply'), N=default_N)
+            export_model(render_kwargs, focal, os.path.join(results_dir, f'g_model_{i}.ply'), os.path.join(results_dir, f'g_model_col_{i}.ply'), N=default_N)
         print("Time:", round((datetime.now() - start_time).total_seconds(), 2))
 
     
@@ -361,7 +353,7 @@ if __name__ == '__main__':
     for i in range(args.i_anim_count):
         with torch.no_grad():
 
-            results_dir = join(results_dir_main, f'i{i}')
+            results_dir = os.path.join(results_dir_main, f'i{i}')
             os.makedirs(results_dir, exist_ok=True)
 
             full_interpolations = None
@@ -387,10 +379,10 @@ if __name__ == '__main__':
 
             steps = render_iterations + 1
 
-            export_model(kwargs_1, focal, join(results_dir, f'i_1_model_{i}.ply'), join(results_dir, f'i_1_model_col_{i}.ply'), N=default_N)
-            export_model(kwargs_2, focal, join(results_dir, f'i_2_model_{i}.ply'), join(results_dir, f'i_2_model_col_{i}.ply'), N=default_N)
+            export_model(kwargs_1, focal, os.path.join(results_dir, f'i_1_model_{i}.ply'), os.path.join(results_dir, f'i_1_model_col_{i}.ply'), N=default_N)
+            export_model(kwargs_2, focal, os.path.join(results_dir, f'i_2_model_{i}.ply'), os.path.join(results_dir, f'i_2_model_col_{i}.ply'), N=default_N)
         
-            writer = imageio.get_writer(join(results_dir, f'i_an_{i}.gif'), fps=render_fps)
+            writer = imageio.get_writer(os.path.join(results_dir, f'i_an_{i}.gif'), fps=render_fps)
             render_poses = torch.stack([pose_spherical(angle, -45, 3.2) for angle in np.linspace(-180,180,steps)[:-1]], 0)
             for k, pose in enumerate(render_poses):
                 
@@ -414,8 +406,8 @@ if __name__ == '__main__':
                 
                 if k % 5==0:
                     kwargs_3['near'] = 0.
-                    export_model(kwargs_3, focal, join(results_dir, f'interpolated_model_{i}_{k}.ply'), join(results_dir, f'interpolated_model_{i}_{k}.ply'), N=default_N)
-                    imageio.imsave(join(results_dir, f'ii_{i}_{k}.png'), to8b(img3.detach().cpu().numpy()))
+                    export_model(kwargs_3, focal, os.path.join(results_dir, f'interpolated_model_{i}_{k}.ply'), os.path.join(results_dir, f'interpolated_model_{i}_{k}.ply'), N=default_N)
+                    imageio.imsave(os.path.join(results_dir, f'ii_{i}_{k}.png'), to8b(img3.detach().cpu().numpy()))
                 
                 writer.append_data(to8b(frame.detach().cpu().numpy()))
             writer.close()

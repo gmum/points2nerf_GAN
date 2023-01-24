@@ -1,15 +1,10 @@
-import numpy as np
-import os
-from os.path import join, exists
-import matplotlib.pyplot as plt
-import torch
+import json
 from torch.utils.data import DataLoader
 from datetime import datetime
-from nerf_helpers import *
 from itertools import chain
-from tqdm import tqdm
 
 import matplotlib
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
@@ -89,17 +84,17 @@ if __name__ == '__main__':
     loss_fn = torch.nn.MSELoss()
 
     results_dir = config['results_dir']
-    os.makedirs(join(dirname,results_dir), exist_ok=True)
+    os.makedirs(os.path.join(dirname,results_dir), exist_ok=True)
 
-    with open(join(results_dir, "config.json"), "w") as file:
+    with open(os.path.join(results_dir, "config.json"), "w") as file:
         json.dump(config, file, indent=4)
 
     try:
-        losses_r = np.load(join(results_dir, f'losses_r.npy')).tolist()
+        losses_r = np.load(os.path.join(results_dir, f'losses_r.npy')).tolist()
         print("Loaded reconstruction losses")
-        losses_kld = np.load(join(results_dir, f'losses_kld.npy')).tolist()
+        losses_kld = np.load(os.path.join(results_dir, f'losses_kld.npy')).tolist()
         print("Loaded KLD losses")
-        losses_total = np.load(join(results_dir, f'losses_total.npy')).tolist()
+        losses_total = np.load(os.path.join(results_dir, f'losses_total.npy')).tolist()
         print("Loaded total losses")
     except:
         print("Haven't found previous loss data. We are assuming that this is a new experiment.")
@@ -114,11 +109,11 @@ if __name__ == '__main__':
     if(starting_epoch>0):
         print("Loading weights since previous losses were found")
         try:
-            hnet.load_state_dict(torch.load(join(results_dir, f"model_hn_{starting_epoch-1}.pt"))) 
+            hnet.load_state_dict(torch.load(os.path.join(results_dir, f"model_hn_{starting_epoch-1}.pt")))
             print("Loaded HNet")
-            encoder.load_state_dict(torch.load(join(results_dir, f"model_e_{starting_epoch-1}.pt")))
+            encoder.load_state_dict(torch.load(os.path.join(results_dir, f"model_e_{starting_epoch-1}.pt")))
             print("Loaded Encoder")
-            scheduler.load_state_dict(torch.load(join(results_dir, f"lr_{starting_epoch-1}.pt")))
+            scheduler.load_state_dict(torch.load(os.path.join(results_dir, f"lr_{starting_epoch-1}.pt")))
             print("Loaded Scheduler")
         except:
             print("Haven't found all previous models.")
@@ -127,7 +122,7 @@ if __name__ == '__main__':
     hnet.train()
     encoder.train()
 
-    os.makedirs(join(results_dir, 'samples'), exist_ok=True)
+    os.makedirs(os.path.join(results_dir, 'samples'), exist_ok=True)
 
     for epoch in range(starting_epoch, starting_epoch+config['max_epochs'] + 1):
         start_epoch_time = datetime.now()
@@ -234,33 +229,33 @@ if __name__ == '__main__':
                 f, axarr = plt.subplots(1,2)
                 axarr[0].imshow(img.detach().cpu())
                 axarr[1].imshow(target.detach().cpu())
-                f.savefig(join(results_dir, 'samples', f"epoch_{epoch}.png"))
+                f.savefig(os.path.join(results_dir, 'samples', f"epoch_{epoch}.png"))
                 plt.close(f)
                 
                 
         if epoch % config['i_save']==0:  
-            torch.save(hnet.state_dict(), join(results_dir, f"model_hn_{epoch}.pt"))
-            torch.save(encoder.state_dict(), join(results_dir, f"model_e_{epoch}.pt"))
-            torch.save(scheduler.state_dict(), join(results_dir, f"lr_{epoch}.pt"))
-            #torch.save(optimizer.state_dict(), join(results_dir, f"opt_{epoch}.pt"))
+            torch.save(hnet.state_dict(), os.path.join(results_dir, f"model_hn_{epoch}.pt"))
+            torch.save(encoder.state_dict(), os.path.join(results_dir, f"model_e_{epoch}.pt"))
+            torch.save(scheduler.state_dict(), os.path.join(results_dir, f"lr_{epoch}.pt"))
+            #torch.save(optimizer.state_dict(), os.path.join(results_dir, f"opt_{epoch}.pt"))
             
-            np.save(join(results_dir, 'losses_r.npy'), np.array(losses_r))
-            np.save(join(results_dir, 'losses_kld.npy'), np.array(losses_kld))
-            np.save(join(results_dir, 'losses_total.npy'), np.array(losses_total))
+            np.save(os.path.join(results_dir, 'losses_r.npy'), np.array(losses_r))
+            np.save(os.path.join(results_dir, 'losses_kld.npy'), np.array(losses_kld))
+            np.save(os.path.join(results_dir, 'losses_total.npy'), np.array(losses_total))
 
             plt.plot(losses_r)
-            plt.savefig(os.path.join(results_dir, f'loss_r_plot.png'))
+            plt.savefig(os.path.os.path.join(results_dir, f'loss_r_plot.png'))
             plt.close()
 
             plt.loglog(losses_r)
-            plt.savefig(os.path.join(results_dir, f'loss_r_plot_log.png'))
+            plt.savefig(os.path.os.path.join(results_dir, f'loss_r_plot_log.png'))
             plt.close()
 
             plt.plot(losses_kld)
-            plt.savefig(os.path.join(results_dir, f'loss_kld_plot.png'))
+            plt.savefig(os.path.os.path.join(results_dir, f'loss_kld_plot.png'))
             plt.close()
 
             plt.plot(losses_total)
-            plt.savefig(os.path.join(results_dir, f'loss_total_plot.png'))
+            plt.savefig(os.path.os.path.join(results_dir, f'loss_total_plot.png'))
             plt.close()
             

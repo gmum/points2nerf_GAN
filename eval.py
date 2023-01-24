@@ -1,14 +1,10 @@
-import numpy as np
-import os
-from os.path import join, exists
-import matplotlib.pyplot as plt
+import json
+import math
+
 import pandas as pd
-import torch
+from torch.ao.sparsity import scheduler
 from torch.utils.data import DataLoader
 from datetime import datetime
-from nerf_helpers import *
-from itertools import chain
-from tqdm import tqdm
 
 import matplotlib
 matplotlib.use('Agg')
@@ -220,17 +216,17 @@ if __name__ == '__main__':
         encoder = Encoder(config).to(device) 
 
     results_dir = config['results_dir']
-    os.makedirs(join(dirname,results_dir), exist_ok=True)
+    os.makedirs(os.path.join(dirname,results_dir), exist_ok=True)
 
-    with open(join(results_dir, "config_eval.json"), "w") as file:
+    with open(os.path.join(results_dir, "config_eval.json"), "w") as file:
         json.dump(config, file, indent=4)
 
     try:
-        losses_r = np.load(join(results_dir, f'losses_r.npy')).tolist()
+        losses_r = np.load(os.path.join(results_dir, f'losses_r.npy')).tolist()
         print("Loaded reconstruction losses")
-        losses_kld = np.load(join(results_dir, f'losses_kld.npy')).tolist()
+        losses_kld = np.load(os.path.join(results_dir, f'losses_kld.npy')).tolist()
         print("Loaded KLD losses")
-        losses_total = np.load(join(results_dir, f'losses_total.npy')).tolist()
+        losses_total = np.load(os.path.join(results_dir, f'losses_total.npy')).tolist()
         print("Loaded total losses")
     except:
         print("Haven't found previous losses. Is this a new experiment?")
@@ -241,11 +237,11 @@ if __name__ == '__main__':
     if losses_total == []:
         print("Loading \'latest\' model without loaded losses")
         try:
-            hnet.load_state_dict(torch.load(join(results_dir, f"model_hn_latest.pt"))) 
+            hnet.load_state_dict(torch.load(os.path.join(results_dir, f"model_hn_latest.pt")))
             print("Loaded HNet")
-            encoder.load_state_dict(torch.load(join(results_dir, f"model_e_latest.pt")))
+            encoder.load_state_dict(torch.load(os.path.join(results_dir, f"model_e_latest.pt")))
             print("Loaded Encoder")
-            scheduler.load_state_dict(torch.load(join(results_dir, f"lr_latest.pt")))
+            scheduler.load_state_dict(torch.load(os.path.join(results_dir, f"lr_latest.pt")))
             print("Loaded Scheduler")
         except:
             print("Haven't loaded all previous models.")
@@ -257,16 +253,16 @@ if __name__ == '__main__':
         if(starting_epoch>0):
             print("Loading weights since previous losses were found")
             try:
-                hnet.load_state_dict(torch.load(join(results_dir, f"model_hn_{starting_epoch-1}.pt"))) 
+                hnet.load_state_dict(torch.load(os.path.join(results_dir, f"model_hn_{starting_epoch-1}.pt")))
                 print("Loaded HNet")
-                encoder.load_state_dict(torch.load(join(results_dir, f"model_e_{starting_epoch-1}.pt")))
+                encoder.load_state_dict(torch.load(os.path.join(results_dir, f"model_e_{starting_epoch-1}.pt")))
                 print("Loaded Encoder")
-                scheduler.load_state_dict(torch.load(join(results_dir, f"lr_{starting_epoch-1}.pt")))
+                scheduler.load_state_dict(torch.load(os.path.join(results_dir, f"lr_{starting_epoch-1}.pt")))
                 print("Loaded Scheduler")
             except:
                 print("Haven't loaded all previous models.")
 
-    results_dir = join(results_dir, 'eval')
+    results_dir = os.path.join(results_dir, 'eval')
     os.makedirs(results_dir, exist_ok=True)
 
     encoder.eval()
