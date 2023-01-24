@@ -12,9 +12,11 @@ from utils import *
 
 from dataset.dataset import NeRFShapeNetDataset
 
-from models.encoder import Encoder
+from models.encoder import Encoder as DGCNN
+from models.encoder_VAE import Encoder as Encoder_VAE
+from models.encoder_simple import Encoder_lrelu
+from models.encoder_simple import Encoder as Encoder_simple
 from models.nerf import NeRF
-from models.resnet import resnet18
 from hypnettorch.hnets.chunked_mlp_hnet import ChunkedHMLP
 
 #Needed for workers for dataloader
@@ -24,6 +26,17 @@ set_start_method('spawn', force=True)
 import argparse
 
 if __name__ == '__main__':
+    # TODO: move to config
+    grad_limit = 1000
+    grad_hard_limit = 32000
+    grad_min_limit = 5
+    grad_ratio = 0.001
+
+
+
+    kill_on_low_variance = False
+    encoder_grad_clipping = False
+    #with torch.autograd.detect_anomaly(check_nan=True):
     dirname = os.path.dirname(__file__)
 
     parser = argparse.ArgumentParser(description='Start training')
@@ -40,6 +53,8 @@ if __name__ == '__main__':
     print(config)
 
     set_seed(config['seed'])
+    eps = config['epsilon']
+    wasserstein_const = config['wasserstein_const']
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print('Device: ', device)
@@ -73,10 +88,15 @@ if __name__ == '__main__':
     print(hnet.param_shapes)
     
     #Create encoder: either Resnet or classic
-    if config['resnet']==True:
-        encoder = resnet18(num_classes=config['z_size']).to(device) 
-    else:
-        encoder = Encoder(config).to(device) 
+    if config['model']['E']['type'] == 'VAE':
+        encoder = Encoder_VAE(config).to(device)
+    elif config['model']['E']['type'] == 'simple':
+        encoder = Encoder_simple(config).to(device)
+    elif config['model']['E']['type'] == 'simple_lrelu':
+        encoder = Encoder_lrelu(config).to(device)
+    elif config['model']['E']['type'] == 'DGCNN':
+        encoder = DGCNN(config).to(device)
+    print('Encoder in use:',encoder.__class__)
 
     #RAdam because it might help with not collapsing to white background
     optimizer = torch.optim.RAdam(chain(encoder.parameters(), hnet.internal_params), **config['optimizer']['E_HN']['hyperparams'])
@@ -92,14 +112,11 @@ if __name__ == '__main__':
     try:
         losses_r = np.load(os.path.join(results_dir, f'losses_r.npy')).tolist()
         print("Loaded reconstruction losses")
-        losses_kld = np.load(os.path.join(results_dir, f'losses_kld.npy')).tolist()
-        print("Loaded KLD losses")
         losses_total = np.load(os.path.join(results_dir, f'losses_total.npy')).tolist()
         print("Loaded total losses")
     except:
         print("Haven't found previous loss data. We are assuming that this is a new experiment.")
         losses_r = []
-        losses_kld = []
         losses_total = []
 
     starting_epoch = len(losses_total)
@@ -129,16 +146,12 @@ if __name__ == '__main__':
         
         total_loss = 0.0
         total_loss_r = 0.0
-        total_loss_kld = 0.0
-        
+
         for i, (entry, cat, obj_path) in enumerate(dataloader):
             x = []
             y = []
             
-            if config['resnet']:
-                nerf_Ws, mu, logvar = get_nerf_resnet(entry, encoder, hnet)
-            else:
-                nerf_Ws, mu, logvar = get_nerf(entry, encoder, hnet)
+            nerf_Ws, code = get_nerf(entry, encoder, hnet, return_code=True)
 
             #For batch size == 1 hnet doesn't return batch dimension...
             if config['batch_size'] == 1:
@@ -184,6 +197,9 @@ if __name__ == '__main__':
                     img_r, _, _, _ = render(H, W, K, chunk=config['model']['TN']['netchunk'], rays=batch_rays.to(device),
                                                             verbose=True, retraw=True,
                                                             **render_kwargs_train)
+                    if kill_on_low_variance and epoch>=1 and torch.sum(img_r).item() < 1e-5:
+                        print('Image variance collapsed')
+                        raise RuntimeError
 
                     x.append(target_s)
                     y.append(img_r)
@@ -194,19 +210,29 @@ if __name__ == '__main__':
 
             loss_r = loss_fn(y, x)
 
-            loss_kld = 0.5 * (torch.exp(logvar) + torch.pow(mu, 2) - 1 - logvar).sum()
 
-            loss = loss_r + loss_kld
+            loss = loss_r
 
             loss.backward()
             optimizer.step()
             
             total_loss_r += loss_r.item()
             total_loss += loss.item()
-            total_loss_kld += loss_kld.item()
-            
+            if encoder_grad_clipping:
+                encoder_grad = torch.nn.utils.clip_grad_norm_(encoder.parameters(),grad_limit)
+                new_grad = get_grad_norm_(encoder.parameters())
+                grad_limit = max(grad_min_limit,min(grad_limit * (1-grad_ratio) + encoder_grad * grad_ratio,grad_hard_limit))
+                # print('Entry {:05} --- GRAD NORM: {} -> {}, lim={}'.format(i,encoder_grad,new_grad,grad_limit))
+                if kill_on_low_variance and encoder_grad >= 32000:
+                    print('Gradient exploded')
+                    raise RuntimeError
+            """
+            else:
+                encoder_grad = get_grad_norm_(encoder.parameters())
+                print('Entry {:05} --- GRAD NORM: {}'.format(i,encoder_grad))
+            """
+
         losses_r.append(total_loss_r)
-        losses_kld.append(total_loss_kld)
         losses_total.append(total_loss)
 
         scheduler.step()
@@ -214,7 +240,7 @@ if __name__ == '__main__':
         #Log information, save models etc.
         if epoch % config['i_log'] == 0:
             print(f"Epoch {epoch}: took {round((datetime.now() - start_epoch_time).total_seconds(), 3)} seconds")
-            print(f"Total loss: {total_loss}     Loss R: {total_loss_r}     Loss KLD: {total_loss_kld}")
+            print(f"Total loss: {total_loss}     Loss R: {total_loss_r}")
         
         #Compare current reconstruction
         if epoch % config['i_sample'] == 0 or epoch == 0:
@@ -240,7 +266,6 @@ if __name__ == '__main__':
             #torch.save(optimizer.state_dict(), os.path.join(results_dir, f"opt_{epoch}.pt"))
             
             np.save(os.path.join(results_dir, 'losses_r.npy'), np.array(losses_r))
-            np.save(os.path.join(results_dir, 'losses_kld.npy'), np.array(losses_kld))
             np.save(os.path.join(results_dir, 'losses_total.npy'), np.array(losses_total))
 
             plt.plot(losses_r)
@@ -249,10 +274,6 @@ if __name__ == '__main__':
 
             plt.loglog(losses_r)
             plt.savefig(os.path.os.path.join(results_dir, f'loss_r_plot_log.png'))
-            plt.close()
-
-            plt.plot(losses_kld)
-            plt.savefig(os.path.os.path.join(results_dir, f'loss_kld_plot.png'))
             plt.close()
 
             plt.plot(losses_total)
